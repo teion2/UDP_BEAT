@@ -1,88 +1,94 @@
+#include "audio.h"
+#include "shared.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
+#include <signal.h>
 #include <windows.h>
-#include <stdint.h>
-#include <stdatomic.h>
 #include <conio.h>
 
-typedef struct {
-    int thread_id;
-    uint64_t counter;
-    pthread_mutex_t lock;
-    atomic_int keep_running;
-    int sleep_ms;
-    const char* thread_name;
-    const char* action;
-} ThreadData;
+volatile sig_atomic_t stop = 0;
 
-void* thread_func(void* arg) {
-    ThreadData* data = (ThreadData*)arg;
-    while(data->keep_running) {
-        Sleep(data->sleep_ms);
-        pthread_mutex_lock(&data->lock);
-        printf("[%s-%d] %s (итерация: %llu)\n", 
-               data->thread_name, data->thread_id, 
-               data->action, ++data->counter);
-        pthread_mutex_unlock(&data->lock);
-        
-        if(!data->keep_running) break;
+void handle_sigint(int sig) {
+    (void)sig;
+    stop = 1;
+}
+
+void* input_thread(void* arg) {
+    (void)arg;
+    printf("Press Enter to stop...\n");
+    while (!stop) {
+        if (_kbhit()) {
+            int c = _getch();
+            if (c == '\r' || c == '\n') {
+                stop = 1;
+                break;
+            }
+        }
+        Sleep(100);
     }
-    pthread_mutex_lock(&data->lock);
-    printf("[%s-%d] Поток завершен (финальная итерация: %llu)\n", 
-           data->thread_name, data->thread_id, data->counter);
-    pthread_mutex_unlock(&data->lock);
     return NULL;
 }
 
 int main() {
-    pthread_t threads[3];
-    ThreadData thread_data[3] = {
-        {1, 0, PTHREAD_MUTEX_INITIALIZER, 1, 300, "Аудио", "Захват данных"},
-        {2, 0, PTHREAD_MUTEX_INITIALIZER, 1, 500, "BTT", "Анализ BPM"},
-        {3, 0, PTHREAD_MUTEX_INITIALIZER, 1, 700, "UDP", "Отправка данных"}
-    };
+    signal(SIGINT, handle_sigint);
 
-    printf("=== Система управления потоками ===\n");
-    printf("Потоки:\n");
-    for(int i = 0; i < 3; i++) {
-        printf("%d. %s (%dms) - %s\n", 
-               thread_data[i].thread_id, 
-               thread_data[i].thread_name, 
-               thread_data[i].sleep_ms,
-               thread_data[i].action);
+    // Инициализация shared данных
+    memset(&shared, 0, sizeof(shared));
+    if (pthread_mutex_init(&shared.mutex, NULL) != 0) {
+        fprintf(stderr, "Mutex init failed\n");
+        return 1;
     }
-    printf("Нажмите Enter для остановки...\n\n");
-
-    // Создание потоков
-    for(int i = 0; i < 3; i++) {
-        pthread_create(&threads[i], NULL, thread_func, &thread_data[i]);
+    if (pthread_cond_init(&shared.cond, NULL) != 0) {
+        fprintf(stderr, "Condition init failed\n");
+        pthread_mutex_destroy(&shared.mutex);
+        return 1;
     }
 
-    // Ожидание нажатия Enter
-    while(!_kbhit() || getchar() != '\n') {
+    // Инициализация аудио
+    if (audio_init() != 0) {
+        fprintf(stderr, "Audio init failed\n");
+        pthread_mutex_destroy(&shared.mutex);
+        pthread_cond_destroy(&shared.cond);
+        return 1;
+    }
+
+    // Поток для обработки ввода
+    pthread_t input_thr;
+    if (pthread_create(&input_thr, NULL, input_thread, NULL) != 0) {
+        fprintf(stderr, "Thread creation failed\n");
+        audio_cleanup();
+        pthread_mutex_destroy(&shared.mutex);
+        pthread_cond_destroy(&shared.cond);
+        return 1;
+    }
+
+    // Запуск аудио
+    printf("Starting audio capture...\n");
+    if (audio_start() != 0) {
+        fprintf(stderr, "Audio start failed\n");
+        stop = 1;
+    }
+
+    // Главный цикл
+    while (!stop) {
+        // Здесь может быть обработка данных
         Sleep(100);
     }
 
-    // Установка флагов завершения
-    for(int i = 0; i < 3; i++) {
-        thread_data[i].keep_running = 0;
+    // Очистка
+    audio_cleanup();
+    pthread_join(input_thr, NULL);
+    
+    pthread_mutex_destroy(&shared.mutex);
+    pthread_cond_destroy(&shared.cond);
+    
+    if (shared.audio_buffer) {
+        free(shared.audio_buffer);
+        shared.audio_buffer = NULL;
     }
 
-    // Ожидание завершения потоков (без tryjoin_np)
-    for(int i = 0; i < 3; i++) {
-        printf("Ожидание завершения потока %s-%d...\n", 
-              thread_data[i].thread_name, thread_data[i].thread_id);
-        pthread_join(threads[i], NULL);
-        pthread_mutex_destroy(&thread_data[i].lock);
-    }
-
-    printf("\nИтоговые счётчики:\n");
-    for(int i = 0; i < 3; i++) {
-        printf("%s-%d: %llu итераций\n", 
-               thread_data[i].thread_name,
-               thread_data[i].thread_id, 
-               thread_data[i].counter);
-    }
-
+    printf("Program stopped\n");
     return 0;
 }

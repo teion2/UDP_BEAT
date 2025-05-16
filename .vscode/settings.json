@@ -1,41 +1,5 @@
 {
-    "terminal.integrated.profiles.windows": {
-        "MSYS2": {
-            "path": "C:\\msys64\\msys2_shell.cmd",
-            "args": [
-                "-defterm",
-                "-here",
-                "-no-start",
-                "-mingw64"
-            ],
-            "icon": "terminal-bash"
-        }
-    },
-    "terminal.integrated.defaultProfile.windows": "MSYS2",
-    
     "code-runner.executorMap": {
-        "c": "cd \"${workspaceFolder}\" && gcc -Wall -Wextra src/*.c -Iinclude -Llib -o bin/main.exe -lbtt -lportaudio -lpthread -lws2_32 && bin/main.exe"
-    },
-    "code-runner.runInTerminal": true,
-    "code-runner.saveFileBeforeRun": true,
-    "code-runner.clearPreviousOutput": true,
-    "code-runner.fileDirectoryAsCwd": false,
-
-    "C_Cpp.default.includePath": [
-        "${workspaceFolder}/include",
-        "C:/msys64/mingw64/include"
-    ],
-    "C_Cpp.default.compilerPath": "C:/msys64/mingw64/bin/gcc.exe",
-    "C_Cpp.intelliSenseMode": "gcc-x64",
-
-    "files.exclude": {
-        "**/.git": true,
-        "**/.vs": true,
-        "**/bin": false,
-        "**/lib": false
-    },
-    "search.exclude": {
-        "**/bin": true,
-        "**/lib": true
+        "c": "cd \"${workspaceFolder}\" && gcc -Wall -Wextra src/main.c src/audio.c src/shared.c -Iinclude -Llib -o bin/main.exe -lbtt -lportaudio -lpthread -lws2_32 -lwinmm -lole32 -lsetupapi -static"
     }
 }
