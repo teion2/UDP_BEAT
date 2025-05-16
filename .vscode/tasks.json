@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Project",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "-Wall",
+                "-Wextra",
+                "src/*.c",
+                "-Iinclude",
+                "-Llib",
+                "-o",
+                "bin/main.exe",
+                "-lbtt",
+                "-lportaudio",
+                "-lpthread",
+                "-lws2_32"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Сборка проекта с BTT и PortAudio"
+        }
+    ]
+}
